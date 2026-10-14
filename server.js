@@ -3,7 +3,7 @@ const app = express();
 
 app.use(express.json());
 
-// In-memory database
+// Server-side database
 const database = {
     events: [],
     processedWebhookIds: new Set()
@@ -17,126 +17,173 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Webhooks vs Polling Demo</title>
+        <title>Live Demo | One event, two methods</title>
         <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #ffffff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-            .container { display: flex; width: 100%; max-width: 1200px; gap: 30px; }
-            .panel { flex: 1; background: #1e1e1e; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-            h1 { color: #4DA8DA; text-align: center; }
-            h2 { color: #cccccc; border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 0; }
-            h3 { color: #888; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-top: 25px;}
-            p.desc { font-size: 13px; color: #aaa; margin-top: -5px; margin-bottom: 15px;}
-            button { width: 100%; padding: 12px; margin-bottom: 10px; cursor: pointer; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; transition: opacity 0.2s; }
+            body { font-family: 'Segoe UI', sans-serif; background-color: #0b1120; color: #ffffff; margin: 0; padding: 30px; display: flex; flex-direction: column; align-items: center; }
+            .header { width: 100%; max-width: 1200px; margin-bottom: 20px; border-bottom: 1px solid #334155; padding-bottom: 15px; }
+            .header h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: 0.5px; }
+            
+            .controls { display: flex; gap: 15px; margin-bottom: 30px; }
+            button { padding: 12px 24px; cursor: pointer; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; transition: opacity 0.2s; }
             button:hover { opacity: 0.8; }
             button:active { transform: scale(0.98); }
+            .btn-poll { background-color: #0284c7; color: white; }
+            .btn-trigger { background-color: #d97706; color: white; }
+            .btn-duplicate { background-color: #7c3aed; color: white; }
             
-            .btn-start { background-color: #007acc; color: white; }
-            .btn-stop { background-color: #cc3300; color: white; }
-            .btn-event { background-color: #d29034; color: white; }
-            .btn-webhook { background-color: #2ea043; color: white; }
-            .btn-duplicate { background-color: #8957e5; color: white; }
+            .container { display: flex; width: 100%; max-width: 1200px; gap: 30px; }
+            .panel { flex: 1; background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
             
-            .log-window { background: #000; padding: 15px; height: 500px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; border-radius: 8px; border: 1px solid #333; font-size: 14px; }
-            .log-line { margin: 0 0 5px 0; line-height: 1.4; }
+            h2.left-title { color: #38bdf8; margin-top: 0; font-size: 20px; letter-spacing: 1px; }
+            h2.right-title { color: #34d399; margin-top: 0; font-size: 20px; letter-spacing: 1px; }
+            
+            .specs { margin-bottom: 20px; color: #cbd5e1; font-size: 15px; }
+            .specs p { margin: 5px 0; }
+            .specs ul { padding-left: 20px; margin-top: 15px; color: #94a3b8; }
+            .specs li { margin-bottom: 4px; }
+            
+            .log-window { flex-grow: 1; background: #0f172a; padding: 15px; height: 350px; overflow-y: auto; font-family: 'Courier New', monospace; border-radius: 8px; border: 1px solid #334155; font-size: 13px; }
+            .log-line { margin: 0 0 6px 0; line-height: 1.4; border-bottom: 1px solid #1e293b; padding-bottom: 4px;}
         </style>
     </head>
     <body>
-        <h1>Team 2: Webhooks vs. Polling</h1>
-        <div class="container">
-            <div class="panel">
-                <h2>Presentation Controls</h2>
-                
-                <h3>1. Polling (The "Are We There Yet?" Method)</h3>
-                <p class="desc">Client constantly asks the server for updates.</p>
-                <button class="btn-start" id="startPollBtn" onclick="startPolling()">Start Polling (Every 2 seconds)</button>
-                <button class="btn-stop" id="stopPollBtn" onclick="stopPolling()">Stop Polling</button>
-                <button class="btn-event" onclick="triggerEvent()">Trigger Background Event</button>
+        <div class="header">
+            <h1>LIVE DEMO | One event, two methods</h1>
+        </div>
 
-                <h3>2. Webhooks (The "Push" Method)</h3>
-                <p class="desc">Server pushes data instantly only when an event occurs.</p>
-                <button class="btn-webhook" onclick="sendWebhook()">Simulate Incoming Webhook (Instant)</button>
-                
-                <h3>3. Failure Modes (Idempotency)</h3>
-                <p class="desc">What happens if a network glitch sends the webhook twice?</p>
-                <button class="btn-duplicate" onclick="sendDuplicateWebhook()">Send Exact Same Webhook Again</button>
+        <div class="controls">
+            <button class="btn-poll" id="togglePollBtn" onclick="togglePolling()">Start Polling Loop</button>
+            <button class="btn-trigger" onclick="triggerSingleEvent()">Trigger One Event</button>
+            <button class="btn-duplicate" onclick="sendDuplicate()">Simulate Glitch (Send Duplicate ID)</button>
+        </div>
+
+        <div class="container">
+            <!-- LEFT PANEL: POLLING -->
+            <div class="panel">
+                <h2 class="left-title">LEFT / POLLING</h2>
+                <div class="specs">
+                    <p>GET /events every 3 seconds</p>
+                    <ul>
+                        <li>Blindly processes received data</li>
+                        <li>waits for next cycle</li>
+                        <li>logs request count</li>
+                    </ul>
+                </div>
+                <div id="pollLogs" class="log-window"></div>
             </div>
             
+            <!-- RIGHT PANEL: WEBHOOK -->
             <div class="panel">
-                <h2>Live Network Logs</h2>
-                <div id="logs" class="log-window"></div>
+                <h2 class="right-title">RIGHT / WEBHOOK</h2>
+                <div class="specs">
+                    <p>POST /webhook on event</p>
+                    <ul>
+                        <li>Server checks for duplicates</li>
+                        <li>notification on event</li>
+                        <li>log arrival time</li>
+                    </ul>
+                </div>
+                <div id="webhookLogs" class="log-window"></div>
             </div>
         </div>
 
         <script>
             let pollInterval = null;
-            const logsDiv = document.getElementById('logs');
+            let requestCount = 0;
+            let lastEventId = null;
 
-            function log(message, color = '#0f0') {
+            function logPoll(message, color = '#94a3b8') {
                 const time = new Date().toLocaleTimeString();
-                logsDiv.innerHTML += \`<div class="log-line" style="color: \${color}">[\${time}] \${message}</div>\`;
-                logsDiv.scrollTop = logsDiv.scrollHeight;
+                const div = document.getElementById('pollLogs');
+                div.innerHTML += \`<div class="log-line" style="color: \${color}">[\${time}] \${message}</div>\`;
+                div.scrollTop = div.scrollHeight;
+            }
+
+            function logWebhook(message, color = '#34d399') {
+                const time = new Date().toLocaleTimeString();
+                const div = document.getElementById('webhookLogs');
+                div.innerHTML += \`<div class="log-line" style="color: \${color}">[\${time}] \${message}</div>\`;
+                div.scrollTop = div.scrollHeight;
             }
 
             // --- POLLING LOGIC ---
-            function startPolling() {
-                if (pollInterval) return;
-                log('=== Polling Client Started ===', '#007acc');
-                pollInterval = setInterval(async () => {
-                    log('Client: Asking API "Anything new?"...', '#888');
-                    try {
-                        const res = await fetch('/api/poll');
-                        const json = await res.json();
-                        if (json.data.length === 0) {
-                            log('Server: 0 new events. (Resource Wasted)', '#cc3300');
-                        } else {
-                            log(\`Server: YES! Found \${json.data.length} new event(s)!\`, '#d29034');
+            function togglePolling() {
+                const btn = document.getElementById('togglePollBtn');
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    btn.innerText = "Start Polling Loop";
+                    btn.style.backgroundColor = "#0284c7";
+                    logPoll('=== Polling Stopped ===', '#ef4444');
+                } else {
+                    btn.innerText = "Stop Polling Loop";
+                    btn.style.backgroundColor = "#ef4444";
+                    logPoll('=== Polling Started ===', '#38bdf8');
+                    
+                    pollInterval = setInterval(async () => {
+                        requestCount++;
+                        try {
+                            const res = await fetch('/api/poll');
+                            const json = await res.json();
+                            if (json.data.length === 0) {
+                                logPoll(\`[Req #\${requestCount}] 0 new events. (Waste)\`);
+                            } else {
+                                json.data.forEach(evt => {
+                                    // Default polling behavior: blindly process whatever the server returns
+                                    logPoll(\`[Req #\${requestCount}] Processed Event: \${evt.id}!\`, '#fbbf24');
+                                });
+                            }
+                        } catch (e) {
+                            logPoll('Error connecting to API', '#ef4444');
                         }
-                    } catch (e) {
-                        log('Error connecting to server.', 'red');
-                    }
-                }, 2000);
-            }
-
-            function stopPolling() {
-                clearInterval(pollInterval);
-                pollInterval = null;
-                log('=== Polling Client Stopped ===', '#007acc');
-            }
-
-            async function triggerEvent() {
-                log('System: External event just happened! Waiting for polling to notice...', '#d29034');
-                await fetch('/api/trigger', { method: 'POST' });
-            }
-
-            // --- WEBHOOK LOGIC ---
-            async function sendWebhook() {
-                log('=== Webhook Provider pushing data... ===', '#2ea043');
-                const webhookId = 'evt_' + Date.now();
-                window.lastWebhookId = webhookId; 
-                
-                const res = await fetch('/api/webhook', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'webhook-id': webhookId },
-                    body: JSON.stringify({ action: 'payment_succeeded' })
-                });
-                const text = await res.text();
-                log(\`API Response: \${res.status} OK - \${text}\`, '#2ea043');
-            }
-
-            async function sendDuplicateWebhook() {
-                if (!window.lastWebhookId) {
-                    log('Error: Please send a normal webhook first.', '#cc3300');
-                    return;
+                    }, 3000);
                 }
-                log(\`=== WARNING: Network glitch! Sending duplicate webhook (\${window.lastWebhookId}) ===\`, '#8957e5');
+            }
+
+            // --- TRIGGER EVENT (Shows both simultaneously) ---
+            async function triggerSingleEvent() {
+                lastEventId = 'evt_' + Date.now();
                 
+                // 1. Add event to the database (Left panel)
+                await fetch('/api/database/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: lastEventId })
+                });
+
+                // 2. Instantly push to the webhook receiver (Right panel)
+                logWebhook(\`Incoming push detected... ID: \${lastEventId}\`, '#cbd5e1');
                 const res = await fetch('/api/webhook', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'webhook-id': window.lastWebhookId },
-                    body: JSON.stringify({ action: 'payment_succeeded' })
+                    headers: { 'Content-Type': 'application/json', 'webhook-id': lastEventId },
+                    body: JSON.stringify({ action: 'data_updated' })
                 });
                 const text = await res.text();
-                log(\`API Response: \${res.status} OK - \${text}\`, '#8957e5');
+                logWebhook(\`Processed: \${text}\`, '#34d399');
+            }
+
+            // --- DUPLICATE SIMULATION (Glitch on both sides) ---
+            async function sendDuplicate() {
+                if (!lastEventId) return alert('Please trigger an event first!');
+                
+                logWebhook(\`[GLITCH] Resending exact same payload... ID: \${lastEventId}\`, '#a78bfa');
+                logPoll(\`[GLITCH] Cursor reset! Server will hand us old data... ID: \${lastEventId}\`, '#a78bfa');
+                
+                // 1. Glitch the polling side (re-inject the same ID as "unread" data)
+                await fetch('/api/database/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: lastEventId })
+                });
+
+                // 2. Glitch the webhook side (push the same ID again immediately)
+                const res = await fetch('/api/webhook', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'webhook-id': lastEventId },
+                    body: JSON.stringify({ action: 'data_updated' })
+                });
+                const text = await res.text();
+                logWebhook(\`API Response: \${text}\`, '#c084fc');
             }
         </script>
     </body>
@@ -145,37 +192,38 @@ app.get('/', (req, res) => {
 });
 
 // =========================================================
-// ENDPOINT 1: Polling Receiver
+// API ENDPOINTS
 // =========================================================
+
+// Left Side: Polling Endpoint
 app.get('/api/poll', (req, res) => {
+    // Only return events that haven't been polled yet
     const newEvents = database.events.filter(event => !event.polled);
+    // Mark them as polled so they aren't returned again (unless manually re-injected)
     newEvents.forEach(event => event.polled = true);
     res.status(200).json({ data: newEvents });
 });
 
-// =========================================================
-// ENDPOINT 2: Webhook Receiver 
-// =========================================================
+// Right Side: Webhook Receiver Endpoint
 app.post('/api/webhook', (req, res) => {
     const webhookId = req.headers['webhook-id'];
 
+    // Server-Side Idempotency Check
     if (database.processedWebhookIds.has(webhookId)) {
-        return res.status(200).send('Duplicate received: Skipped business logic, event already processed');
+        return res.status(200).send(`200 OK (Duplicate Ignored)`);
     }
 
+    // Process normal event
     database.processedWebhookIds.add(webhookId);
-    res.status(200).send('Webhook successfully received and processed instantly');
+    res.status(200).send('200 OK (Success)');
 });
 
-// =========================================================
-// ENDPOINT 3: Event Trigger (Simulate the outside world)
-// =========================================================
-app.post('/api/trigger', (req, res) => {
-    const event = { id: `evt_${Date.now()}`, action: 'user_registered', polled: false };
-    database.events.push(event);
-    res.status(201).json(event);
+// Background Simulator: Adds event to DB so polling can find it
+app.post('/api/database/add', (req, res) => {
+    database.events.push({ id: req.body.id, polled: false });
+    res.sendStatus(201);
 });
 
 app.listen(3000, () => {
-    console.log(`Open your browser and go to: http://localhost:3000`);
+    console.log(`Open browser to: http://localhost:3000`);
 });
